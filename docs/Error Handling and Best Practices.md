@@ -304,6 +304,7 @@ fn test_game_initialization() {
     // More assertions...
 }
 ```
+## Threading Strategy
 
 ### Multi-Threading Optimization
 
