@@ -1,2 +1,2 @@
 # RustBlocks
-A super lightweight yet visually beautiful Tetris game focused on Andriod
+A super lightweight yet visually beautiful Tetris game focused on Android

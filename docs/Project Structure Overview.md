@@ -1,4 +1,4 @@
-# Rust Tetris Project: Structure Overview
+# Structure Overview
 
 ## Project Directory Structure
 
@@ -19,7 +19,7 @@ tetris-rust/
 │   │   ├── menus.rs     # Game menus (start, pause, settings)
 │   │   ├── hud.rs       # In-game heads-up display
 │   ├── audio/           # Sound and music components
-│   │   ├── effects.rs   # Sound effect management
+│   │   ├── aeffects.rs   # Sound effect management
 │   │   ├── music.rs     # Background music management
 │   ├── input/           # Input handling
 │   │   ├── touch.rs     # Touch controls for mobile
@@ -77,4 +77,3 @@ tetris-rust/
 - Android builds processed through cargo-apk
 - Asset bundling handled via build.rs
 
-This structure provides a foundation that balances modularity with simplicity, allowing for progressive implementation of features while maintaining a clear organization.
