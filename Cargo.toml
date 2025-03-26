@@ -1,0 +1,50 @@
+[package]
+name = "rustblocks"
+version = "0.1.0"
+edition = "2021"
+authors = ["Prakrut Rajesh"]
+description = "A super lightweight yet visually beautiful Tetris game focused on Android"
+license = "MIT"
+
+[dependencies]
+# Core game framework
+macroquad = "0.4.4"
+
+# Graphics libraries
+lyon = "1.0.1"
+tiny-skia = "0.8.3"
+
+# UI framework
+egui = "0.24.1"
+egui-macroquad = "0.17.0"
+
+# Audio engine
+kira = "0.8.5"
+
+# Utilities
+log = "0.4.20"
+env_logger = "0.10.1"
+rand = "0.8.5"
+
+[target.'cfg(target_os = "android")'.dependencies]
+ndk-glue = "0.7.0"
+
+[lib]
+name = "rustblocks"
+crate-type = ["staticlib", "cdylib"]
+
+[[bin]]
+name = "rustblocks"
+path = "src/main.rs"
+
+[package.metadata.android]
+package_name = "com.prakrut.rustblocks"
+label = "RustBlocks"
+version_code = 1
+icon = "@mipmap/ic_launcher"
+target_sdk_version = 33
+min_sdk_version = 24
+build_targets = ["aarch64-linux-android", "armv7-linux-androideabi"]
+resources = "android/res"
+assets = "assets"
+fullscreen = true
