@@ -1,4 +1,4 @@
-# Tech Stack Reference
+# Tech Stack Reference (Desktop Focus)
 
 ## Core Language: Rust
 
@@ -16,30 +16,28 @@
 - Traits for component behavior standardization
 - Enums for state representation (e.g., tetromino types)
 
-**Integration Notes:**
-- Using stable Rust features only to ensure compatibility
-- Focused on idiomatic Rust patterns optimized for mobile
-
 ## Game Framework: Macroquad
 
 **Version:** 0.4.x
 
 **Key Features Used:**
-- Cross-platform window and graphics context handling
+- Window and graphics context handling
 - Game loop with timing controls
-- Basic input handling foundation
+- Input handling for keyboard and mouse
 - Asset loading utilities
+- Desktop window management
 
 **Integration Approach:**
 - Using Macroquad's main loop via `#[macroquad::main]`
 - Leveraging the framework's window management
 - Utilizing built-in timing functions for consistent game speed
-- Handling basic keyboard/touch input events
+- Handling keyboard input events for game control
 
-**Usage Patterns:**
-- Custom draw calls that integrate with Lyon/Tiny-skia
-- State-based game progression
-- Frame time management for consistent gameplay
+**Desktop Features:**
+- Custom window sizing and configuration
+- Support for multiple screen resolutions
+- Fullscreen and windowed mode options
+- Keyboard control schemes with customizable bindings
 
 ## Graphics Rendering: Lyon + Tiny-skia
 
@@ -52,13 +50,14 @@
 
 **Integration Approach:**
 - Lyon for creating tetromino shape geometry
-- Tiny-skia for GPU-accelerated rendering
+- Tiny-skia for high-quality rendering
 - Custom wrapper for managing the rendering pipeline
 
-**Usage Patterns:**
-- Pre-generated shape definitions for tetrominoes
-- Runtime transformation for piece movement and rotation
-- Custom effects pipeline for visual polish
+**Desktop Enhancements:**
+- Higher-resolution assets and rendering
+- More complex visual effects leveraging desktop GPU capabilities
+- Screen scaling options for different monitor sizes
+- Enhanced particle effects and animations
 
 ## UI Framework: egui
 
@@ -66,18 +65,20 @@
 
 **Key Features Used:**
 - Immediate mode GUI for game menus
-- Touch-friendly widgets
+- Mouse-friendly widgets
 - Styling customization
+- Window and dialog management
 
 **Integration Approach:**
 - Wrapped within Macroquad's main loop
 - Custom rendering pass for UI elements
-- Mobile-optimized input handling
+- Desktop-focused input handling
 
-**Usage Patterns:**
-- Minimal UI approach focused on mobile usability
-- Consistent styling across all menus
-- Touch-friendly button sizes and spacing
+**Desktop UI Features:**
+- Mouse-driven menu navigation
+- Keyboard shortcuts
+- Context menus and tooltips
+- Settings panels with more configuration options
 
 ## Audio Engine: kira
 
@@ -87,35 +88,18 @@
 - Multi-channel audio playback
 - Sound effect management
 - Dynamic audio mixing
+- Music streaming
 
 **Integration Approach:**
 - Initialization at game startup
 - Encapsulated audio management system
 - Event-based triggering of sound effects
 
-**Usage Patterns:**
-- Preloaded sound effects for game actions
-- Background music with adaptive volume
-- Audio feedback tied to game events
-
-## Mobile Integration: cargo-apk
-
-**Version:** 0.9.x
-
-**Key Features Used:**
-- Android packaging and deployment
-- Permission management
-- Resource bundling
-
-**Integration Approach:**
-- Custom build script for Android packaging
-- Asset bundling through resource directories
-- Android manifest configuration
-
-**Usage Patterns:**
-- Development builds with debugging enabled
-- Release builds with optimizations
-- Screen orientation locking for gameplay
+**Desktop Audio Enhancements:**
+- Higher quality audio files
+- More complex mixing and effects processing
+- Volume control and audio settings
+- Support for external audio devices
 
 ## Development Tools
 
@@ -137,10 +121,11 @@
 - Minimizing allocations during gameplay
 - Implementing fixed timestep logic for consistent gameplay
 - Texture atlas usage for efficient rendering
-- Mobile-specific power usage optimizations
+- Adaptive performance based on system capabilities
 
 ## Resource Management
 
 - Assets loaded at startup to prevent mid-game loading
-- Memory usage monitoring for mobile constraints
+- Memory usage monitoring
 - Efficient texture management for rendering pipeline
+- Dynamic resource loading based on available system memory

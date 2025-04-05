@@ -1,4 +1,4 @@
-# Rust Error Handling & Best Practices 
+# Rust Error Handling & Bevy Best Practices
 
 ## Error Handling Patterns
 
@@ -6,12 +6,12 @@
 
 ```rust
 // Prefer Result for operations that can fail
-fn load_game_assets() -> Result<GameAssets, AssetError> {
+fn load_game_assets(asset_server: &Res<AssetServer>) -> Result<GameAssets, AssetError> {
     // Implementation
 }
 
 // Use Option for values that might not exist
-fn get_active_tetromino() -> Option<Tetromino> {
+fn get_active_tetromino(query: &Query<(Entity, &ActiveTetromino)>) -> Option<Entity> {
     // Implementation
 }
 ```
@@ -37,16 +37,39 @@ impl std::fmt::Display for GameError {
 }
 ```
 
-### Error Propagation
+### Error Propagation with Bevy
 
 ```rust
-// Use the ? operator for clean error propagation
-fn initialize_game() -> Result<Game, GameError> {
-    let assets = load_game_assets()?;
-    let board = create_board()?;
-    let renderer = initialize_renderer()?;
+// Using Result with Bevy systems
+fn asset_loading_system(
+    asset_server: Res<AssetServer>,
+    mut commands: Commands,
+    mut game_assets: ResMut<GameAssets>,
+) -> Result<(), GameError> {
+    let texture = asset_server.load("textures/block.png");
     
-    Ok(Game { assets, board, renderer })
+    // Check if asset is loaded
+    if asset_server.get_load_state(texture.clone_weak()) != LoadState::Loaded {
+        return Err(GameError::AssetLoadFailure("Block texture failed to load".into()));
+    }
+    
+    game_assets.block_texture = texture;
+    Ok(())
+}
+
+// Using the error handling system
+fn setup_plugin(app: &mut App) {
+    app.add_systems(Startup, 
+        asset_loading_system.pipe(handle_asset_loading_error)
+    );
+}
+
+// Error handler system
+fn handle_asset_loading_error(In(result): In<Result<(), GameError>>) {
+    if let Err(error) = result {
+        error!("Asset loading error: {}", error);
+        // Handle the error appropriately
+    }
 }
 ```
 
@@ -54,181 +77,323 @@ fn initialize_game() -> Result<Game, GameError> {
 
 ```rust
 // Use fallbacks for non-critical errors
-fn load_high_scores() -> Vec<Score> {
+fn load_high_scores(mut commands: Commands) {
     match read_scores_from_storage() {
-        Ok(scores) => scores,
+        Ok(scores) => {
+            commands.insert_resource(HighScores(scores));
+        },
         Err(e) => {
-            log::warn!("Failed to load scores: {}", e);
-            Vec::new() // Fallback to empty scores
+            error!("Failed to load scores: {}", e);
+            // Fallback to empty scores
+            commands.insert_resource(HighScores(Vec::new()));
         }
     }
 }
 ```
 
-## Memory Management Approaches
+## Bevy ECS Best Practices
 
-### Game State Organization
+### Component Design
 
 ```rust
-// Organize game state to leverage ownership
-struct Game {
-    board: Board,
-    current_piece: Option<Tetromino>,
-    next_pieces: Vec<Tetromino>,
-    score: Score,
+// Keep components small and focused
+#[derive(Component)]
+struct Position {
+    x: i32,
+    y: i32,
 }
 
-// Use references for read-only access
-fn render_game(game: &Game) {
-    // Implementation
-}
+#[derive(Component)]
+struct TetrominoType(TetroShape);
 
-// Use mutable references for state changes
-fn update_game(game: &mut Game) {
-    // Implementation
+#[derive(Component)]
+struct Rotation(RotationState);
+
+// Use marker components for categorization
+#[derive(Component)]
+struct ActiveTetromino;
+
+#[derive(Component)]
+struct GhostTetromino;
+
+// Bundle components for common entity types
+#[derive(Bundle)]
+struct TetrominoBundle {
+    position: Position,
+    tetromino_type: TetrominoType,
+    rotation: Rotation,
+    active: ActiveTetromino,
+    // Render components
+    sprite: SpriteBundle,
 }
 ```
 
 ### Resource Management
 
 ```rust
-// Use RAII for resource management
-struct AudioManager {
-    sound_effects: HashMap<SoundEffect, AudioHandle>,
+// Game state stored in resources
+#[derive(Resource)]
+struct Board {
+    cells: [[CellState; 10]; 20],
 }
 
-impl Drop for AudioManager {
-    fn drop(&mut self) {
-        // Clean up audio resources
+#[derive(Resource)]
+struct Score {
+    value: u32,
+    level: u32,
+    lines_cleared: u32,
+}
+
+// Access resources in systems
+fn update_score_system(
+    mut score: ResMut<Score>,
+    board_events: EventReader<LinesClearedEvent>,
+) {
+    for event in board_events.iter() {
+        score.value += calculate_score(event.lines_count, score.level);
+        score.lines_cleared += event.lines_count as u32;
+        // Update level based on lines cleared
+        score.level = (score.lines_cleared / 10) + 1;
     }
 }
 ```
 
-### Avoiding Allocations During Gameplay
+### System Design
 
 ```rust
-// Pre-allocate collections
-let mut particle_effects = Vec::with_capacity(MAX_PARTICLES);
+// Keep systems focused on a single task
+fn tetromino_movement_system(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut query: Query<&mut Position, With<ActiveTetromino>>,
+    board: Res<Board>,
+    time: Res<Time>,
+) {
+    // Implementation
+}
 
-// Reuse vectors instead of creating new ones
-fn clear_completed_lines(board: &mut Board) {
-    board.line_clear_buffer.clear(); // Reuse existing vector
-    // Find completed lines and add to buffer
+// Use query filters effectively
+fn render_ghost_tetromino(
+    mut ghost_query: Query<(&mut Transform, &Position), With<GhostTetromino>>,
+    active_query: Query<(&Position, &TetrominoType, &Rotation), With<ActiveTetromino>>,
+    board: Res<Board>,
+) {
+    // Implementation
+}
+
+// Use system sets for organization and ordering
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+enum GameplaySystems {
+    InputProcessing,
+    TetrominoMovement,
+    CollisionDetection,
+    LineClearing,
+}
+
+fn setup_game_systems(app: &mut App) {
+    app
+        .configure_sets(
+            Update,
+            (
+                GameplaySystems::InputProcessing,
+                GameplaySystems::TetrominoMovement,
+                GameplaySystems::CollisionDetection,
+                GameplaySystems::LineClearing,
+            ).chain()
+        )
+        .add_systems(Update, process_input.in_set(GameplaySystems::InputProcessing))
+        .add_systems(Update, move_tetromino.in_set(GameplaySystems::TetrominoMovement))
+        // Additional systems
 }
 ```
 
-## Performance Optimization Techniques
-
-### Static Dispatch
+### State Management
 
 ```rust
-// Prefer static dispatch for performance-critical code
-trait Renderable {
-    fn render(&self, renderer: &Renderer);
+// Define game states
+#[derive(States, Default, Debug, Clone, Eq, PartialEq, Hash)]
+enum GameState {
+    #[default]
+    MainMenu,
+    Playing,
+    Paused,
+    GameOver,
 }
 
-// Use impl Trait for static dispatch
-fn render_game_elements(elements: &[impl Renderable], renderer: &Renderer) {
-    for element in elements {
-        element.render(renderer);
+// Add state-specific systems
+fn setup_states(app: &mut App) {
+    app
+        .add_state::<GameState>()
+        .add_systems(OnEnter(GameState::Playing), spawn_initial_tetromino)
+        .add_systems(OnExit(GameState::Playing), cleanup_game_entities)
+        .add_systems(
+            Update,
+            (
+                tetromino_movement_system,
+                collision_detection_system,
+            ).run_if(in_state(GameState::Playing))
+        )
+}
+
+// State transition system
+fn check_game_over(
+    board: Res<Board>,
+    mut next_state: ResMut<NextState<GameState>>,
+) {
+    if is_game_over(&board) {
+        next_state.set(GameState::GameOver);
     }
 }
 ```
 
-### Avoiding Unnecessary Clones
+### Event Handling
 
 ```rust
-// Use references instead of cloning
-fn preview_piece_position(board: &Board, piece: &Tetromino) -> bool {
-    // Implementation using references
+// Define custom events
+#[derive(Event)]
+struct LinesClearedEvent {
+    lines: Vec<usize>,
+    lines_count: usize,
 }
 
-// When needed, consider Cow for efficient handling
-use std::borrow::Cow;
+#[derive(Event)]
+struct TetrominoPlacedEvent {
+    position: Position,
+    tetromino_type: TetrominoType,
+}
 
-fn get_piece_display_name(piece: &Tetromino) -> Cow<'static, str> {
-    match piece.shape {
-        TetrominoShape::I => Cow::Borrowed("I-Piece"),
-        TetrominoShape::Custom(ref name) => Cow::Owned(format!("Custom: {}", name)),
-        // Other cases...
+// Register events
+fn register_events(app: &mut App) {
+    app
+        .add_event::<LinesClearedEvent>()
+        .add_event::<TetrominoPlacedEvent>();
+}
+
+// Send events
+fn check_lines_system(
+    board: Res<Board>,
+    mut line_events: EventWriter<LinesClearedEvent>,
+) {
+    let lines = find_completed_lines(&board);
+    if !lines.is_empty() {
+        line_events.send(LinesClearedEvent {
+            lines: lines.clone(),
+            lines_count: lines.len(),
+        });
+    }
+}
+
+// Receive events
+fn handle_lines_cleared(
+    mut events: EventReader<LinesClearedEvent>,
+    mut board: ResMut<Board>,
+) {
+    for event in events.iter() {
+        clear_lines(&mut board, &event.lines);
     }
 }
 ```
 
-### Fixed-Size Arrays and Const Generics
+## Performance Optimization in Bevy
+
+### Entity Management
 
 ```rust
-// Use const generics for board dimensions
-struct Board<const WIDTH: usize, const HEIGHT: usize> {
-    cells: [[CellState; WIDTH]; HEIGHT],
+// Efficiently create entities with bundles
+fn spawn_tetromino(
+    commands: &mut Commands,
+    tetromino_type: TetrominoType,
+    position: Position,
+    assets: &GameAssets,
+) {
+    commands.spawn(TetrominoBundle {
+        position,
+        tetromino_type,
+        rotation: Rotation(RotationState::R0),
+        active: ActiveTetromino,
+        sprite: SpriteBundle {
+            texture: assets.block_texture.clone(),
+            transform: Transform::from_xyz(
+                position.x as f32 * BLOCK_SIZE,
+                position.y as f32 * BLOCK_SIZE,
+                1.0
+            ),
+            ..Default::default()
+        },
+    });
 }
 
-// Standard Tetris board
-type StandardBoard = Board<10, 20>;
+// Efficiently clean up entities
+fn cleanup_game_entities(
+    mut commands: Commands,
+    tetromino_query: Query<Entity, Or<(With<ActiveTetromino>, With<GhostTetromino>)>>,
+) {
+    for entity in tetromino_query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
 ```
 
-## Mobile-Specific Considerations
-
-### Efficient Touch Input Handling
+### System Optimization
 
 ```rust
-// Process input events efficiently
-fn handle_touch_input(touch_event: TouchEvent) -> GameAction {
-    match touch_event.phase {
-        TouchPhase::Started => handle_touch_start(touch_event),
-        TouchPhase::Moved => {
-            // Only process meaningful movements (optimization)
-            if touch_event.distance_moved() > MOVEMENT_THRESHOLD {
-                handle_touch_move(touch_event)
-            } else {
-                GameAction::None
-            }
+// Use change detection to avoid unnecessary work
+fn update_transform_system(
+    mut query: Query<(&Position, &mut Transform), Changed<Position>>,
+) {
+    for (position, mut transform) in query.iter_mut() {
+        transform.translation.x = position.x as f32 * BLOCK_SIZE;
+        transform.translation.y = position.y as f32 * BLOCK_SIZE;
+    }
+}
+
+// Use RemovedComponents for cleanup
+fn handle_removed_tetrominos(
+    mut commands: Commands,
+    mut removed: RemovedComponents<ActiveTetromino>,
+    ghost_query: Query<Entity, With<GhostTetromino>>,
+) {
+    if !removed.is_empty() {
+        // When active tetromino is removed, also remove ghost
+        for ghost_entity in ghost_query.iter() {
+            commands.entity(ghost_entity).despawn();
         }
-        TouchPhase::Ended => handle_touch_end(touch_event),
     }
 }
 ```
 
-### Battery-Conscious Design
+### Asset Management
 
 ```rust
-// Implement frame skipping for battery efficiency
-fn update_game_state(game: &mut Game, delta_time: f32) {
-    game.accumulated_time += delta_time;
-    
-    // Only update at fixed intervals
-    while game.accumulated_time >= FIXED_TIME_STEP {
-        perform_game_update(game);
-        game.accumulated_time -= FIXED_TIME_STEP;
-    }
+// Efficiently load and manage assets
+#[derive(Resource)]
+struct GameAssets {
+    block_textures: [Handle<Image>; 7],
+    font: Handle<Font>,
+    place_sound: Handle<AudioSource>,
+    clear_sound: Handle<AudioSource>,
+}
+
+fn load_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
+    commands.insert_resource(GameAssets {
+        block_textures: [
+            asset_server.load("textures/block_i.png"),
+            asset_server.load("textures/block_o.png"),
+            asset_server.load("textures/block_t.png"),
+            asset_server.load("textures/block_s.png"),
+            asset_server.load("textures/block_z.png"),
+            asset_server.load("textures/block_j.png"),
+            asset_server.load("textures/block_l.png"),
+        ],
+        font: asset_server.load("fonts/game_font.ttf"),
+        place_sound: asset_server.load("audio/place.ogg"),
+        clear_sound: asset_server.load("audio/clear.ogg"),
+    });
 }
 ```
 
-### Minimizing System Calls
+## Testing in Bevy
 
-```rust
-// Batch rendering operations
-fn render_board(board: &Board, renderer: &mut Renderer) {
-    // Begin batch to minimize GPU calls
-    renderer.begin_batch();
-    
-    // Add all cells to the batch
-    for y in 0..board.height {
-        for x in 0..board.width {
-            if let Some(cell_type) = board.get_cell(x, y) {
-                renderer.add_to_batch(cell_type, x, y);
-            }
-        }
-    }
-    
-    // Single draw call
-    renderer.end_batch_and_render();
-}
-```
-
-## Testing Strategies
-
-### Unit Testing Game Logic
+### Unit Testing Components and Resources
 
 ```rust
 #[cfg(test)]
@@ -237,144 +402,160 @@ mod tests {
     
     #[test]
     fn test_tetromino_rotation() {
-        let mut piece = Tetromino::new(TetrominoShape::L);
-        let original_cells = piece.get_cells();
+        let rotation = Rotation(RotationState::R0);
+        let rotated = rotation.rotate_cw();
         
-        piece.rotate_clockwise();
+        assert_eq!(rotated, Rotation(RotationState::R90));
         
-        // After 4 rotations, should be back to original position
-        for _ in 0..3 {
-            piece.rotate_clockwise();
+        // Test full rotation
+        let mut rotation = Rotation(RotationState::R0);
+        for _ in 0..4 {
+            rotation = rotation.rotate_cw();
         }
-        
-        assert_eq!(original_cells, piece.get_cells());
-    }
-    
-    #[test]
-    fn test_line_clearing() {
-        let mut board = Board::new(10, 20);
-        
-        // Fill a line
-        for x in 0..10 {
-            board.set_cell(x, 19, CellType::Filled);
-        }
-        
-        let lines_cleared = board.clear_completed_lines();
-        
-        assert_eq!(lines_cleared, 1);
-        // Check the board state after clearing
-        for x in 0..10 {
-            assert_eq!(board.get_cell(x, 19), CellType::Empty);
-        }
+        assert_eq!(rotation, Rotation(RotationState::R0));
     }
 }
 ```
 
-### Property-Based Testing
+### Integration Testing with Bevy
 
 ```rust
 #[cfg(test)]
-mod property_tests {
+mod integration_tests {
     use super::*;
-    use proptest::prelude::*;
+    use bevy::prelude::*;
+    use bevy::app::AppExit;
     
-    proptest! {
-        #[test]
-        fn test_board_bounds_check(x in 0..15u32, y in 0..25u32) {
-            let board = Board::new(10, 20);
+    // Test that game initializes properly
+    #[test]
+    fn test_game_initialization() {
+        // Create a test app
+        let mut app = App::new();
+        
+        // Add only the minimal plugins needed for testing
+        app.add_plugins(MinimalPlugins)
+           .add_plugin(GamePlugin);
+        
+        // Initialize and run for a single update
+        app.update();
+        
+        // Verify initial state
+        assert_eq!(app.world.resource::<State<GameState>>().get(), &GameState::MainMenu);
+        
+        // Verify resources were added
+        assert!(app.world.contains_resource::<Board>());
+        assert!(app.world.contains_resource::<Score>());
+    }
+    
+    // Test state transitions
+    #[test]
+    fn test_state_transition() {
+        let mut app = App::new();
+        
+        app.add_plugins(MinimalPlugins)
+           .add_plugin(GamePlugin);
+        
+        // Trigger state change
+        app.world.resource_mut::<NextState<GameState>>()
+            .set(GameState::Playing);
+        
+        // Run update to process state change
+        app.update();
+        
+        // Verify state changed
+        assert_eq!(app.world.resource::<State<GameState>>().get(), &GameState::Playing);
+        
+        // Verify playing state systems ran
+        let active_tetromino_query = app.world.query_filtered::<Entity, With<ActiveTetromino>>();
+        assert_eq!(active_tetromino_query.iter(&app.world).count(), 1);
+    }
+}
+```
+
+## Common Bevy Patterns and Solutions
+
+### Plugin Organization
+
+```rust
+// Main game plugin that organizes all functionality
+pub struct GamePlugin;
+
+impl Plugin for GamePlugin {
+    fn build(&self, app: &mut App) {
+        app
+            // Add sub-plugins
+            .add_plugin(BoardPlugin)
+            .add_plugin(TetrominoPlugin)
+            .add_plugin(UIPlugin)
+            .add_plugin(AudioPlugin)
             
-            // Board should correctly report if coordinates are in bounds
-            let expected = x < 10 && y < 20;
-            assert_eq!(board.is_in_bounds(x, y), expected);
+            // Add states
+            .add_state::<GameState>()
+            
+            // Add resources
+            .init_resource::<Score>()
+            .init_resource::<GameConfig>()
+            
+            // Add events
+            .add_event::<LinesClearedEvent>()
+            .add_event::<TetrominoPlacedEvent>()
+            
+            // Add systems
+            .add_systems(Startup, setup_game)
+            .add_systems(Update, (
+                process_input,
+                update_game_logic,
+                render_updates,
+            ).chain());
+    }
+}
+
+// Sub-plugin example
+pub struct BoardPlugin;
+
+impl Plugin for BoardPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .init_resource::<Board>()
+            .add_systems(Startup, setup_board)
+            .add_systems(Update, (
+                check_completed_lines,
+                clear_completed_lines,
+            ).chain().run_if(in_state(GameState::Playing)));
+    }
+}
+```
+
+### Handle Window Configuration
+
+```rust
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "RustBlocks".into(),
+                resolution: (800.0, 600.0).into(),
+                resizable: true,
+                position: WindowPosition::Centered(MonitorSelection::Primary),
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugin(GamePlugin)
+        .run();
+}
+
+// Handle fullscreen toggling
+fn toggle_fullscreen_system(
+    keyboard_input: Res<Input<KeyCode>>,
+    mut windows: Query<&mut Window>,
+) {
+    if keyboard_input.just_pressed(KeyCode::F11) {
+        if let Ok(mut window) = windows.get_single_mut() {
+            window.mode = match window.mode {
+                WindowMode::Windowed => WindowMode::Fullscreen,
+                _ => WindowMode::Windowed,
+            };
         }
     }
 }
-```
-
-### Integration Testing
-
-```rust
-#[test]
-fn test_game_initialization() {
-    let game = Game::new().expect("Failed to initialize game");
-    
-    assert!(game.board.is_empty());
-    assert!(game.current_piece.is_some());
-    assert_eq!(game.score.value, 0);
-    // More assertions...
-}
-```
-## Threading Strategy
-
-### Multi-Threading Optimization
-
-```rust
-// Configure thread pool based on available cores
-fn initialize_thread_pool() -> ThreadPool {
-    let num_cores = std::thread::available_parallelism()
-        .map(|p| p.get())
-        .unwrap_or(2);
-    
-    // Use at least one thread, but scale based on device capabilities
-    let thread_count = std::cmp::max(1, num_cores - 1);
-    
-    ThreadPool::new(thread_count)
-}
-```
-
-### Work Distribution Strategy
-
-```rust
-// Distribute appropriate workloads across threads
-struct GameEngine {
-    thread_pool: ThreadPool,
-    // Other engine components...
-}
-
-impl GameEngine {
-    fn update(&mut self, delta_time: f32) {
-        // Main game logic remains on primary thread
-        self.update_game_state(delta_time);
-        
-        // Offload appropriate parallel tasks
-        self.thread_pool.execute(|| {
-            // Particle effects, AI calculations, 
-            // physics simulations, etc.
-        });
-    }
-}
-```
-
-### Thread Synchronization
-
-```rust
-// Carefully manage shared state between threads
-use std::sync::{Arc, Mutex};
-
-struct ParticleSystem {
-    particles: Arc<Mutex<Vec<Particle>>>,
-}
-
-impl ParticleSystem {
-    fn update_particles(&self) {
-        self.thread_pool.execute({
-            let particles = Arc::clone(&self.particles);
-            move || {
-                let mut particles = particles.lock().unwrap();
-                // Update particles in parallel
-            }
-        });
-    }
-}
-```
-
-## Common Pitfalls and Solutions
-
-1. **Borrow Checker Challenges**: Use clear ownership boundaries between game components.
-
-2. **Excessive Cloning**: Implement game logic to work with references when possible.
-
-3. **Premature Optimization**: Build for correctness first, then optimize hot paths.
-
-4. **Error Recovery**: Design the game to recover gracefully from non-critical errors.
-

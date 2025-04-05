@@ -3,77 +3,92 @@
 ## Project Directory Structure
 
 ```
-tetris-rust/
+rustblocks/
 ├── Cargo.toml           # Project dependencies and metadata
 ├── src/
-│   ├── main.rs          # Application entry point
-│   ├── game.rs          # Game loop and state management
-│   ├── components/      # Core game components
-│   │   ├── tetromino.rs # Tetromino shapes and rotation logic
-│   │   ├── board.rs     # Game board and collision detection
-│   │   ├── scoring.rs   # Score tracking and level progression
-│   ├── rendering/       # Visual rendering components
-│   │   ├── shapes.rs    # Lyon and Tiny-skia rendering utilities
-│   │   ├── effects.rs   # Visual effects (particles, animations)
-│   ├── ui/              # User interface components
-│   │   ├── menus.rs     # Game menus (start, pause, settings)
-│   │   ├── hud.rs       # In-game heads-up display
-│   ├── audio/           # Sound and music components
-│   │   ├── aeffects.rs   # Sound effect management
-│   │   ├── music.rs     # Background music management
-│   ├── input/           # Input handling
-│   │   ├── touch.rs     # Touch controls for mobile
-│   ├── utils/           # Utility functions
-│   │   ├── config.rs    # Game configuration
-│   │   ├── debug.rs     # Debugging utilities
+│   ├── main.rs          # Application entry point and Bevy app configuration
+│   ├── game/            # Game state and core loop management
+│   │   ├── states.rs    # Game state definitions and transitions
+│   │   ├── resources.rs # Global game resources
+│   ├── components/      # ECS components
+│   │   ├── tetromino.rs # Tetromino data components
+│   │   ├── board.rs     # Game board components
+│   │   ├── scoring.rs   # Score and level tracking
+│   ├── systems/         # ECS systems
+│   │   ├── input.rs     # Input handling systems
+│   │   ├── gameplay.rs  # Core gameplay systems
+│   │   ├── rendering.rs # Visual systems
+│   │   ├── audio.rs     # Sound systems
+│   ├── plugins/         # Bevy plugins for feature encapsulation
+│   │   ├── game_plugin.rs  # Main game systems
+│   │   ├── ui_plugin.rs    # User interface
+│   │   ├── audio_plugin.rs # Sound management
+│   ├── assets/          # Asset loading and management
+│   ├── utils/           # Helper functions and utilities
 ├── assets/              # Game assets
 │   ├── audio/           # Sound effects and music
 │   ├── fonts/           # Text fonts
-├── android/             # Android-specific files
-│   ├── AndroidManifest.xml  # Android configuration
-│   ├── build.gradle     # Android build configuration
+│   ├── images/          # Textures and visual assets
 ├── tests/               # Test modules
 ```
 
 ## Core Component Structure
 
-### Game Core (game.rs)
-- **GameState**: Enum defining different game states (Menu, Playing, Paused, GameOver)
-- **Game**: Main struct coordinating the game components and managing the game loop
-- **update()**: Updates game state based on input and game rules
-- **draw()**: Coordinates rendering of all game elements
+### Entity Components (components/*.rs)
+- **TetrominoComponent**: Contains tetromino type, color, and orientation data
+- **PositionComponent**: Grid position for game entities
+- **BoardCellComponent**: Individual cells that make up the game board
+- **ScoreComponent**: Tracking scores and level progression
+- **PlayerComponent**: Marker component for player-controlled entities
 
-### Tetromino System (components/tetromino.rs)
-- **TetrominoType**: Enum of the seven standard Tetris pieces
-- **Tetromino**: Struct containing position, rotation, and type
-- **rotation_system**: Implementation of the Super Rotation System
-- **spawn_tetromino()**: Creates new tetrominoes at the top of the board
+### Game States (game/states.rs)
+- **AppState**: Main application states (MainMenu, InGame, Paused, GameOver)
+- **GameState**: More granular game states (Spawning, Falling, Locking, LineClear)
+- State transition logic and definitions
 
-### Board System (components/board.rs)
-- **Board**: 2D grid representation of the game board
-- **check_collision()**: Collision detection between pieces and board
-- **clear_lines()**: Logic for detecting and clearing completed lines
-- **lock_piece()**: Solidifies a tetromino into the board
+### Global Resources (game/resources.rs)
+- **BoardResource**: Game board state data
+- **ScoreResource**: Current score, level, and lines cleared
+- **GameConfigResource**: Game settings and configuration
+- **InputStateResource**: Current state of controls
 
-### Rendering Pipeline (rendering/shapes.rs)
-- Integration with Lyon for vector shape creation
-- Integration with Tiny-skia for rendering
-- **draw_tetromino()**: Renders active and ghost tetrominoes
-- **draw_board()**: Renders the game board and locked pieces
+### System Groups (systems/*.rs)
+- **InputSystems**: Handle keyboard input and translation to game actions
+- **GameplaySystems**: Core tetris mechanics (movement, rotation, collision, line clearing)
+- **RenderingSystems**: Visual representation of game entities
+- **AudioSystems**: Sound effect and music triggering
 
-### Touch Input System (input/touch.rs)
-- **TouchHandler**: Manages and processes touch inputs
-- **swipe_detection()**: Logic for handling swipe gestures
-- **tap_detection()**: Logic for handling taps
+### Plugins (plugins/*.rs)
+- **GamePlugin**: Core gameplay mechanics and state
+- **UIPlugin**: User interface elements and interactions
+- **AudioPlugin**: Sound management and playback
 
 ## Initialization Flow
+
 1. Application starts in main.rs
-2. Game creates and initializes all components
-3. Asset loading occurs during initialization
-4. Main game loop begins, alternating between update and draw cycles
+2. Bevy app is configured with plugins, resources, and systems
+3. Initial state is set to main menu
+4. Bevy's ECS takes over running systems based on current state
+5. State transitions drive the game flow
 
-## Build and Deployment
-- Development builds use cargo run
-- Android builds processed through cargo-apk
-- Asset bundling handled via build.rs
+## Bevy-specific Architecture
 
+### Entity-Component-System Pattern
+- Entities: Represent game objects (tetrominos, board cells)
+- Components: Data attached to entities (position, color, rotation)
+- Systems: Logic that operates on entities with specific components
+- Resources: Global state shared across systems
+
+### State Management
+- State-driven system execution using Bevy's state machine
+- Systems can be conditioned to run only in specific states
+- State transitions trigger entry/exit systems
+
+### Event System
+- Events used for decoupled communication between systems
+- Key events: BlockPlaced, LineCleared, GameOver, ScoreChanged
+
+### Asset Management
+- Bevy's asset system handles loading and management of resources
+- Fonts, textures, and audio loaded through AssetServer
+- Asset handles passed through components or resources

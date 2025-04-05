@@ -1,6 +1,19 @@
-use rustblocks_lib::run_game;  // Fix module reference
+use bevy::prelude::*;
 
-#[macroquad::main("RustBlocks")]
-async fn main() {
-    run_game().await;
+mod game;
+mod utils; // Import but don't use yet, just to ensure it compiles
+
+fn main() {
+    App::new()
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "RustBlocks".into(),
+                resolution: (800.0, 600.0).into(),
+                resizable: true,
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins(game::GamePlugin)
+        .run();
 }
