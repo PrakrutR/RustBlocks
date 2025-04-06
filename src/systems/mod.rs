@@ -1,2 +1,1 @@
-pub mod tetromino;
 pub mod visual_effects;

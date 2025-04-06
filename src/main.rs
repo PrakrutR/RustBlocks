@@ -2,7 +2,8 @@ use bevy::prelude::*;
 
 mod game;
 mod components;
-mod utils; // Import but don't use yet, just to ensure it compiles
+mod systems;
+mod utils;
 
 fn main() {
     App::new()
