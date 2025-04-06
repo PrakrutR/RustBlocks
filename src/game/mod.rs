@@ -3,10 +3,11 @@ use std::time::Duration;
 use rand::{thread_rng, Rng};
 use once_cell::sync::Lazy;
 
-use crate::components::tetromino::{TetrominoType, FallingTetromino, spawn_tetromino, COLORS};
+use crate::components::tetromino::{TetrominoType, FallingTetromino, spawn_tetromino};
 
-// Use statics instead of consts for non-const function calls
+// Background and UI colors using Lazy static
 pub static BG_COLOR: Lazy<Color> = Lazy::new(|| Color::hex("111133").unwrap());
+pub static GRID_COLOR: Lazy<Color> = Lazy::new(|| Color::hex("333366").unwrap());
 pub static ACCENT_COLOR: Lazy<Color> = Lazy::new(|| Color::hex("00FFAA").unwrap());
 pub static ACCENT_COLOR_2: Lazy<Color> = Lazy::new(|| Color::hex("FF00AA").unwrap());
 
@@ -24,6 +25,12 @@ struct Pulsing {
 
 #[derive(Component)]
 struct ScanLines;
+
+#[derive(Component)]
+struct GridLines;
+
+#[derive(Component)]
+struct MainMenuUI;
 
 #[derive(Resource)]
 struct GameAssets {
@@ -44,6 +51,7 @@ impl Plugin for GamePlugin {
                 animate_pulsing_elements,
                 animate_scan_lines,
                 spawn_falling_tetrominos.run_if(on_timer(Duration::from_secs_f32(0.8))),
+                update_ui_positions,
                 handle_exit,
             ));
     }
@@ -60,11 +68,46 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     commands.spawn(Camera2dBundle::default());
 
+    // Grid lines
+    let grid_size = 40.0;
+    let num_lines = 30;
+
+    for i in -num_lines..=num_lines {
+        // Vertical lines
+        commands.spawn((
+            SpriteBundle {
+                sprite: Sprite {
+                    color: *GRID_COLOR,
+                    custom_size: Some(Vec2::new(1.0, 2000.0)),
+                    ..default()
+                },
+                transform: Transform::from_xyz(i as f32 * grid_size, 0.0, 1.0),
+                ..default()
+            },
+            GridLines,
+        ));
+
+        // Horizontal lines
+        commands.spawn((
+            SpriteBundle {
+                sprite: Sprite {
+                    color: *GRID_COLOR,
+                    custom_size: Some(Vec2::new(2000.0, 1.0)),
+                    ..default()
+                },
+                transform: Transform::from_xyz(0.0, i as f32 * grid_size, 1.0),
+                ..default()
+            },
+            GridLines,
+        ));
+    }
+
+    // Scan lines overlay
     commands.spawn((
         SpriteBundle {
             sprite: Sprite {
                 color: Color::rgba(1.0, 1.0, 1.0, 0.03),
-                custom_size: Some(Vec2::new(800.0, 600.0)),
+                custom_size: Some(Vec2::new(2000.0, 2000.0)),
                 ..default()
             },
             transform: Transform::from_xyz(0.0, 0.0, 100.0),
@@ -73,109 +116,87 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         ScanLines,
     ));
 
-    commands.spawn((
-        TextBundle::from_section(
-            "RUSTBLOCKS",
-            TextStyle {
-                font: vt323_font.clone(),
-                font_size: 120.0,
-                color: Color::WHITE,
-            },
-        )
-        .with_text_alignment(TextAlignment::Center)
-        .with_style(Style {
-            position_type: PositionType::Absolute,
-            left: Val::Px(250.0),
-            top: Val::Px(120.0),
-            ..default()
-        }),
-        Pulsing {
-            speed: 0.8,
-            min_scale: 1.0,
-            max_scale: 1.05,
-        },
-    ));
+    // Main menu UI container
+    let main_menu = commands.spawn((
+        SpatialBundle::default(),
+        MainMenuUI,
+    )).id();
 
-    commands.spawn(
-        TextBundle::from_section(
-            "A RETRO-MODERN TETRIS EXPERIENCE",
-            TextStyle {
-                font: share_tech_mono_font.clone(),
-                font_size: 24.0,
-                color: *ACCENT_COLOR,
-            },
-        )
-        .with_text_alignment(TextAlignment::Center)
-        .with_style(Style {
-            position_type: PositionType::Absolute,
-            left: Val::Px(220.0),
-            top: Val::Px(220.0),
-            ..default()
-        }),
-    );
-
-    for (i, color) in COLORS.iter().enumerate() {
-        let angle = (i as f32 / COLORS.len() as f32) * std::f32::consts::TAU;
-        let radius = 180.0;
-        let x_pos = radius * angle.cos();
-        let y_pos = 350.0 + (radius * angle.sin() * 0.5);
-
-        commands.spawn((
-            SpriteBundle {
-                sprite: Sprite {
-                    color: *color,
-                    custom_size: Some(Vec2::new(40.0, 40.0)),
-                    ..default()
-                },
-                transform: Transform::from_xyz(x_pos, y_pos, 10.0),
+    // Title text
+    commands.entity(main_menu).with_children(|parent| {
+        parent.spawn((
+            Text2dBundle {
+                text: Text::from_section(
+                    "RustBlocks",
+                    TextStyle {
+                        font: vt323_font.clone(),
+                        font_size: 120.0,
+                        color: Color::WHITE,
+                    },
+                ).with_alignment(TextAlignment::Center),
+                transform: Transform::from_xyz(0.0, 180.0, 10.0),
                 ..default()
             },
-            Rotating {
-                speed: 0.3 + (i as f32 * 0.08),
+            Pulsing {
+                speed: 0.8,
+                min_scale: 1.0,
+                max_scale: 1.05,
             },
         ));
-    }
 
-    commands.spawn((
-        TextBundle::from_section(
-            "PRESS ENTER TO START",
-            TextStyle {
-                font: vt323_font.clone(),
-                font_size: 36.0,
-                color: *ACCENT_COLOR_2,
+        // Subtitle
+        parent.spawn(
+            Text2dBundle {
+                text: Text::from_section(
+                    "Retro-Modern Tetris in Rust",
+                    TextStyle {
+                        font: share_tech_mono_font.clone(),
+                        font_size: 24.0,
+                        color: *ACCENT_COLOR,
+                    },
+                ).with_alignment(TextAlignment::Center),
+                transform: Transform::from_xyz(0.0, 120.0, 10.0),
+                ..default()
             },
-        )
-        .with_text_alignment(TextAlignment::Center)
-        .with_style(Style {
-            position_type: PositionType::Absolute,
-            left: Val::Px(270.0),
-            top: Val::Px(500.0),
-            ..default()
-        }),
-        Pulsing {
-            speed: 2.0,
-            min_scale: 0.95,
-            max_scale: 1.05,
-        },
-    ));
+        );
 
-    commands.spawn(
-        TextBundle::from_section(
-            "V0.1.0",
-            TextStyle {
-                font: share_tech_mono_font.clone(),
-                font_size: 16.0,
-                color: Color::rgba(1.0, 1.0, 1.0, 0.4),
+        // "Press Enter" text
+        parent.spawn((
+            Text2dBundle {
+                text: Text::from_section(
+                    "PRESS ENTER TO START",
+                    TextStyle {
+                        font: vt323_font.clone(),
+                        font_size: 36.0,
+                        color: *ACCENT_COLOR_2,
+                    },
+                ).with_alignment(TextAlignment::Center),
+                transform: Transform::from_xyz(0.0, -160.0, 10.0),
+                ..default()
             },
-        )
-        .with_text_alignment(TextAlignment::Center)
-        .with_style(Style {
-            position_type: PositionType::Absolute,
-            right: Val::Px(20.0),
-            bottom: Val::Px(20.0),
-            ..default()
-        }),
-    );
+            Pulsing {
+                speed: 2.0,
+                min_scale: 0.95,
+                max_scale: 1.05,
+            },
+        ));
+
+        // Version info
+        parent.spawn(
+            Text2dBundle {
+                text: Text::from_section(
+                    "V0.1.0",
+                    TextStyle {
+                        font: share_tech_mono_font.clone(),
+                        font_size: 16.0,
+                        color: Color::rgba(1.0, 1.0, 1.0, 0.4),
+                    },
+                ).with_alignment(TextAlignment::Center),
+                transform: Transform::from_xyz(380.0, -280.0, 10.0),
+                ..default()
+            },
+        );
+    });
 }
 
 fn spawn_falling_tetrominos(
@@ -186,8 +207,9 @@ fn spawn_falling_tetrominos(
     let mut rng = thread_rng();
 
     let tetromino_type = TetrominoType::random();
-    let x_pos = rng.gen_range(-window.width() / 2.0..window.width() / 2.0);
-    let y_pos = window.height() / 2.0 + 50.0;
+    let width_range = window.width() * 0.7;
+    let x_pos = rng.gen_range(-width_range..width_range);
+    let y_pos = window.height() / 2.0 + 100.0;
 
     let rotation_speed = rng.gen_range(0.2..1.0);
     let fall_speed = rng.gen_range(40.0..100.0);
@@ -202,6 +224,17 @@ fn spawn_falling_tetrominos(
             rotation_speed,
         }),
     );
+}
+
+fn update_ui_positions(
+    windows: Query<&Window>,
+    mut ui_query: Query<&mut Transform, With<MainMenuUI>>,
+) {
+    if let Ok(mut ui_transform) = ui_query.get_single_mut() {
+        let _window = windows.single(); // fixed unused variable
+        ui_transform.translation.x = 0.0;
+        ui_transform.translation.y = 0.0;
+    }
 }
 
 fn animate_falling_tetrominos(
@@ -231,10 +264,10 @@ fn animate_rotating_elements(time: Res<Time>, mut query: Query<(&mut Transform, 
 
 fn animate_pulsing_elements(time: Res<Time>, mut query: Query<(&mut Transform, &Pulsing)>) {
     for (mut transform, pulsing) in query.iter_mut() {
-        let scale_factor = ((time.elapsed_seconds() * pulsing.speed).sin() * 0.5 + 0.5) 
-            * (pulsing.max_scale - pulsing.min_scale) 
+        let scale_factor = ((time.elapsed_seconds() * pulsing.speed).sin() * 0.5 + 0.5)
+            * (pulsing.max_scale - pulsing.min_scale)
             + pulsing.min_scale;
-        
+
         transform.scale = Vec3::splat(scale_factor);
     }
 }
