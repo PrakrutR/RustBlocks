@@ -3,7 +3,7 @@
 
 use bevy::prelude::*;
 use bevy_egui::EguiPlugin;
-use bevy_kira_audio::{Audio, AudioPlugin};
+// use bevy_kira_audio::AudioPlugin;
 use lyon::math::Point;
 use rand::random;
 
@@ -28,7 +28,7 @@ pub struct DependencyTestPlugin;
 impl Plugin for DependencyTestPlugin {
     fn build(&self, app: &mut App) {
         app
-            .add_plugins(AudioPlugin)
+            // .add_plugins(AudioPlugin)
             .add_plugins(EguiPlugin);
             
         // We would add systems and resources here in a real implementation

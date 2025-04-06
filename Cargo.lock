@@ -3619,6 +3619,7 @@ dependencies = [
  "bevy_kira_audio",
  "log",
  "lyon",
+ "once_cell",
  "rand 0.8.5",
 ]
 

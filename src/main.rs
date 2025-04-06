@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 mod game;
+mod components;
 mod utils; // Import but don't use yet, just to ensure it compiles
 
 fn main() {
@@ -10,6 +11,7 @@ fn main() {
                 title: "RustBlocks".into(),
                 resolution: (800.0, 600.0).into(),
                 resizable: true,
+                position: WindowPosition::Centered(MonitorSelection::Primary),
                 ..default()
             }),
             ..default()
